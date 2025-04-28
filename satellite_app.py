@@ -41,7 +41,7 @@ satellites_info = {
     "NOAA 19": {
         "country": "USA",
         "purpose": "Weather",
-        "tle_url": "https://celestrak.org/NORAD/elements/noaa.txt",
+        "tle_url": "https://www.celestrak.com/NORAD/elements/weather.txt",
         "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/NOAA-19.jpg"
     },
     "Sentinel-1A": {

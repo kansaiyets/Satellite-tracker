@@ -194,14 +194,24 @@ folium.Marker([lat_now, lon_now], popup=f"現在位置: {selected_satellite}").a
 
 # 過去24時間の軌跡
 time_steps = [t_now - (i * 1440) for i in range(1, 25)]  # 1時間おき
-trajectory = []
+
 for t in time_steps:
-    geo = satellite_obj.at(t)
-    sp = geo.subpoint()
-    trajectory.append((sp.latitude.degrees, sp.longitude.degrees))
+    geocentric = satellite.at(t)
+    subpoint = geocentric.subpoint()
+    folium.CircleMarker(
+        location=[subpoint.latitude.degrees, subpoint.longitude.degrees],
+        radius=2, color="blue", fill=True
+    ).add_to(m)
+
+
+#trajectory = []
+#for t in time_steps:
+#    geo = satellite_obj.at(t)
+#    sp = geo.subpoint()
+#    trajectory.append((sp.latitude.degrees, sp.longitude.degrees))
 
 # 線で軌跡をプロット
-folium.PolyLine(trajectory, color="blue", weight=2.5, opacity=0.7).add_to(m)
+#folium.PolyLine(trajectory, color="blue", weight=2.5, opacity=0.7).add_to(m)
 
 # 地図表示
 st.components.v1.html(m._repr_html_(), height=500)

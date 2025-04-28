@@ -162,9 +162,9 @@ st.write(f"**国**: {sat_info['country']}")
 st.write(f"**目的**: {sat_info['purpose']}")
 
 # 画像表示
-response = requests.get(sat_info["image_url"])
-img = Image.open(BytesIO(response.content))
-st.image(img, caption=f"{selected_satellite} (出典: Wikimedia Commons)", use_container_width=True)
+#response = requests.get(sat_info["image_url"])
+#img = Image.open(BytesIO(response.content))
+#st.image(img, caption=f"{selected_satellite} (出典: Wikimedia Commons)", use_container_width=True)
 
 # 衛星位置取得
 stations_url = sat_info["tle_url"]

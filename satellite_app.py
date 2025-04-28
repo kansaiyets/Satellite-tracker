@@ -148,7 +148,7 @@ m = folium.Map(location=[lat_now, lon_now], zoom_start=3)
 folium.Marker([lat_now, lon_now], popup=f"{selected_satellite} 現在位置").add_to(m)
 
 # 過去24時間の軌跡
-time_steps = [t_now - (i / 144) for i in range(1, 145)]
+time_steps = [t_now - (i / 1440) for i in range(1, 251)]
 for t in time_steps:
     geocentric = satellite.at(t)
     subpoint = geocentric.subpoint()

@@ -6,118 +6,205 @@ from PIL import Image
 from io import BytesIO
 import folium
 
-# ---- データ定義（20個くらい衛星） ----
+# ---- 衛星情報定義 (20個) ----
 satellites_info = {
     "ISS (ZARYA)": {
         "country": "International",
         "purpose": "Research",
-        "launch_date": "1998-11-20",
-        "description": "International Space Station.",
         "tle_url": "https://celestrak.org/NORAD/elements/stations.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/9/97/ISS_in_2021.jpg"
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d0/ISS_Expedition_20.jpg"
     },
     "Hubble Space Telescope": {
         "country": "USA",
         "purpose": "Astronomy",
-        "launch_date": "1990-04-24",
-        "description": "Space telescope orbiting Earth.",
         "tle_url": "https://celestrak.org/NORAD/elements/science.txt",
         "image_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/HST-SM4.jpeg"
     },
     "Terra": {
         "country": "USA",
         "purpose": "Earth Observation",
-        "launch_date": "1999-12-18",
-        "description": "Earth observing satellite.",
-        "tle_url": "https://celestrak.org/NORAD/elements/earth-observation.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Terra_satellite.jpg"
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/4/45/Terra_Satellite.jpg"
     },
     "Aqua": {
         "country": "USA",
         "purpose": "Earth Observation",
-        "launch_date": "2002-05-04",
-        "description": "Studies Earth's water cycle.",
-        "tle_url": "https://celestrak.org/NORAD/elements/earth-observation.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/6/66/Aqua_satellite.jpg"
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Aqua_satellite.jpg"
     },
     "Landsat 8": {
         "country": "USA",
-        "purpose": "Earth Imaging",
-        "launch_date": "2013-02-11",
-        "description": "Landsat program satellite.",
-        "tle_url": "https://celestrak.org/NORAD/elements/earth-observation.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/6/64/Landsat_8_in_orbit.jpg"
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/Landsat_8_artwork.jpg"
     },
-    # 以下、同様に追加できる（省略）
+    "NOAA 19": {
+        "country": "USA",
+        "purpose": "Weather",
+        "tle_url": "https://celestrak.org/NORAD/elements/noaa.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/NOAA-19.jpg"
+    },
+    "Sentinel-1A": {
+        "country": "EU",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/2/23/Sentinel-1_spacecraft_model.png"
+    },
+    "Sentinel-2A": {
+        "country": "EU",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Sentinel-2_model.jpg"
+    },
+    "Jason-3": {
+        "country": "International",
+        "purpose": "Oceanography",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Jason-3_Artist_Concept.jpg"
+    },
+    "Starlink-30000": {
+        "country": "USA",
+        "purpose": "Communications",
+        "tle_url": "https://celestrak.org/NORAD/elements/starlink.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Starlink_SpaceX.jpg"
+    },
+    "Globalstar M086": {
+        "country": "USA",
+        "purpose": "Communications",
+        "tle_url": "https://celestrak.org/NORAD/elements/globalstar.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Globalstar_Satellite.jpg"
+    },
+    "TDRS 12": {
+        "country": "USA",
+        "purpose": "Communications",
+        "tle_url": "https://celestrak.org/NORAD/elements/tdrs.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/6/62/TDRS-M_Artist_Rendering.jpg"
+    },
+    "COSMO-SkyMed 1": {
+        "country": "Italy",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/COSMO-SkyMed.jpg"
+    },
+    "Envisat": {
+        "country": "EU",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/73/Envisat_artist_view.jpg"
+    },
+    "MetOp-B": {
+        "country": "EU",
+        "purpose": "Weather",
+        "tle_url": "https://celestrak.org/NORAD/elements/noaa.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/e/e7/Metop-B.jpg"
+    },
+    "TanDEM-X": {
+        "country": "Germany",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/c/c2/TanDEM-X_Satellite.jpg"
+    },
+    "WorldView-3": {
+        "country": "USA",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/WorldView-3_Artist_Rendering.jpg"
+    },
+    "IKONOS": {
+        "country": "USA",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/2/2b/IKONOS_satellite.jpg"
+    },
+    "Cartosat-2": {
+        "country": "India",
+        "purpose": "Earth Observation",
+        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/76/Cartosat-2_Artist_View.jpg"
+    },
+    "Fengyun 3D": {
+        "country": "China",
+        "purpose": "Weather",
+        "tle_url": "https://celestrak.org/NORAD/elements/weather.txt",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Fengyun-3.jpg"
+    }
 }
 
 # ---- Streamlit画面 ----
 st.title("🌍 衛星リアルタイムビューア")
 
-# 衛星選択
-satellite_names = list(satellites_info.keys())
-selected_satellite = st.selectbox("衛星を選んでください", satellite_names)
+# 国・目的でフィルタリング
+countries = sorted(set(info["country"] for info in satellites_info.values()))
+purposes = sorted(set(info["purpose"] for info in satellites_info.values()))
 
-# 衛星情報表示
-info = satellites_info[selected_satellite]
+selected_country = st.selectbox("🌎 国を選択", ["すべて"] + countries)
+selected_purpose = st.selectbox("🎯 目的を選択", ["すべて"] + purposes)
+
+# 衛星リストフィルタ
+def satellite_filter(info):
+    if selected_country != "すべて" and info["country"] != selected_country:
+        return False
+    if selected_purpose != "すべて" and info["purpose"] != selected_purpose:
+        return False
+    return True
+
+filtered_satellites = [name for name, info in satellites_info.items() if satellite_filter(info)]
+if not filtered_satellites:
+    st.error("条件に合う衛星がありません。")
+    st.stop()
+
+selected_satellite = st.selectbox("🛰️ 衛星を選択", filtered_satellites)
+sat_info = satellites_info[selected_satellite]
+
+# 衛星基本情報
 st.subheader(f"🛰️ {selected_satellite}")
-st.write(f"**国**: {info['country']}")
-st.write(f"**目的**: {info['purpose']}")
-st.write(f"**打ち上げ日**: {info['launch_date']}")
-st.write(f"**説明**: {info['description']}")
+st.write(f"**国**: {sat_info['country']}")
+st.write(f"**目的**: {sat_info['purpose']}")
 
-# 衛星画像
-try:
-    response = requests.get(info["image_url"])
-    img = Image.open(BytesIO(response.content))
-    st.image(img, caption=f"{selected_satellite} (Image credit: Wikimedia/Pixabay)", use_container_width=True)
-except:
-    st.warning("画像の取得に失敗しました。")
+# 画像表示
+response = requests.get(sat_info["image_url"])
+img = Image.open(BytesIO(response.content))
+st.image(img, caption=f"{selected_satellite} (出典: Wikimedia Commons)", use_container_width=True)
+
+# 衛星位置取得
+stations_url = sat_info["tle_url"]
+satellites = load.tle_file(stations_url)
+satellite_obj = None
+for s in satellites:
+    if s.name == selected_satellite:
+        satellite_obj = s
+        break
+if satellite_obj is None:
+    st.error("選択した衛星のTLEデータが見つかりませんでした。")
+    st.stop()
+
+# 現在時刻取得
+ts = load.timescale()
+t_now = ts.now()
 
 # 衛星位置計算
-try:
-    satellites = load.tle_file(info["tle_url"])
-    satellite_obj = None
-    for sat in satellites:
-        if selected_satellite.lower() in sat.name.lower():
-            satellite_obj = sat
-            break
-    if not satellite_obj:
-        raise Exception("TLEデータから衛星を見つけられませんでした。")
+geocentric = satellite_obj.at(t_now)
+subpoint = geocentric.subpoint()
+lat_now = subpoint.latitude.degrees
+lon_now = subpoint.longitude.degrees
 
-    ts = load.timescale()
-    t_now = ts.now()
+# 地図作成
+m = folium.Map(location=[lat_now, lon_now], zoom_start=3)
+folium.Marker([lat_now, lon_now], popup=f"現在位置: {selected_satellite}").add_to(m)
 
-    geocentric_now = satellite_obj.at(t_now)
-    subpoint_now = geocentric_now.subpoint()
+# 過去24時間の軌跡
+time_steps = [t_now - (i * 1440) for i in range(1, 241)]  # 1時間おき
+trajectory = []
+for t in time_steps:
+    geo = satellite_obj.at(t)
+    sp = geo.subpoint()
+    trajectory.append((sp.latitude.degrees, sp.longitude.degrees))
 
-    lat_now = subpoint_now.latitude.degrees
-    lon_now = subpoint_now.longitude.degrees
+# 線で軌跡をプロット
+folium.PolyLine(trajectory, color="blue", weight=2.5, opacity=0.7).add_to(m)
 
-    # 地図表示
-    m = folium.Map(location=[lat_now, lon_now], zoom_start=3)
-    folium.Marker([lat_now, lon_now], popup=f"現在位置: {lat_now:.2f}, {lon_now:.2f}").add_to(m)
+# 地図表示
+st.components.v1.html(m._repr_html_(), height=500)
 
-    # 過去24時間の軌跡
-    for hour in range(1, 241):
-        past_time = t_now - (hour / 1440.0)
-        past_geocentric = satellite_obj.at(past_time)
-        past_subpoint = past_geocentric.subpoint()
-        lat_past = past_subpoint.latitude.degrees
-        lon_past = past_subpoint.longitude.degrees
-        folium.CircleMarker(
-            location=[lat_past, lon_past],
-            radius=2,
-            color="blue",
-            fill=True,
-            fill_opacity=0.7
-        ).add_to(m)
-
-    # 地図を表示
-    st.components.v1.html(m._repr_html_(), height=600)
-
-    # 現在位置も表示
-    st.write(f"**現在位置**: 緯度 {lat_now:.2f}°, 経度 {lon_now:.2f}°")
-
-except Exception as e:
-    st.error(f"衛星データの取得に失敗しました: {e}")
+# 現在位置表示
+st.write(f"**現在位置**: 緯度 {lat_now:.2f}°, 経度 {lon_now:.2f}°")

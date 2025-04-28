@@ -61,7 +61,7 @@ m = folium.Map(location=[lat, lon], zoom_start=3)  # ズームレベルを調整
 folium.Marker([lat, lon], popup=f"{selected_satellite}の位置").add_to(m)
 
 # Streamlitでfolium地図を表示
-st.write(m._repr_html_(), unsafe_allow_html=True)
+st.components.v1.html(m._repr_html_(), height=500)
 
 # 衛星位置情報の表示
 st.write(f"**現在位置**: 緯度 {lat:.2f}°, 経度 {lon:.2f}°")

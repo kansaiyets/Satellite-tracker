@@ -39,7 +39,7 @@ st.write(f"**説明**: {info['description']}")
 # 画像表示
 response = requests.get(info["image_url"])
 img = Image.open(BytesIO(response.content))
-st.image(img, caption=selected_satellite, use_column_width=True)
+st.image(img, caption=selected_satellite, use_container_width=True)
 
 # 衛星位置表示
 stations_url = info["tle_url"]

@@ -197,7 +197,7 @@ time_steps = [t_now - (i * 1440) for i in range(1, 25)]  # 1時間おき
 
 # 点で軌跡をプロット
 for t in time_steps:
-    geocentric = satellite.at(t)
+    geocentric = satellite_obj.at(t)
     subpoint = geocentric.subpoint()
     folium.CircleMarker(
         location=[subpoint.latitude.degrees, subpoint.longitude.degrees],

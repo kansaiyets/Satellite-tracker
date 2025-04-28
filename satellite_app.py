@@ -16,7 +16,7 @@ satellites_info = {
         "launch_date": "1998-11-20",
         "description": "The International Space Station (ISS) is a modular space station in low Earth orbit.",
         "tle_url": "https://celestrak.org/NORAD/elements/stations.txt",
-        "image_url": "https://cdn.pixabay.com/photo/2012/10/26/02/30/space-station-63020_1280.jpg"
+        "image_url": "https://cdn.pixabay.com/photo/2012/10/26/02/39/international-space-station-63128_1280.jpg"
     }
 }
 

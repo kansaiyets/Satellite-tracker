@@ -1,5 +1,3 @@
-# ファイル名例: satellite_app.py
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -7,6 +5,7 @@ from skyfield.api import load
 import plotly.express as px
 from PIL import Image
 from io import BytesIO
+import folium
 
 # ---- データ定義 ----
 satellites_info = {
@@ -55,6 +54,14 @@ subpoint = geocentric.subpoint()
 lat = subpoint.latitude.degrees
 lon = subpoint.longitude.degrees
 
-st.map(pd.DataFrame({'lat': [lat], 'lon': [lon]}))
+# foliumで地図を作成
+m = folium.Map(location=[lat, lon], zoom_start=3)  # ズームレベルを調整
 
+# 衛星の位置にマーカーを追加
+folium.Marker([lat, lon], popup=f"{selected_satellite}の位置").add_to(m)
+
+# Streamlitでfolium地図を表示
+st.write(m._repr_html_(), unsafe_allow_html=True)
+
+# 衛星位置情報の表示
 st.write(f"**現在位置**: 緯度 {lat:.2f}°, 経度 {lon:.2f}°")

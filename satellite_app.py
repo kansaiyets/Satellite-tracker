@@ -193,7 +193,7 @@ m = folium.Map(location=[lat_now, lon_now], zoom_start=3)
 folium.Marker([lat_now, lon_now], popup=f"現在位置: {selected_satellite}").add_to(m)
 
 # 過去24時間の軌跡
-time_steps = [t_now - (i / 1440) for i in range(1, 61)]  # 1時間おき
+time_steps = [t_now - (i / 1440) for i in range(1, 181)]  # 3時間ぶん
 
 # 点で軌跡をプロット
 for t in time_steps:

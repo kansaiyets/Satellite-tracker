@@ -1,221 +1,146 @@
 import streamlit as st
 import pandas as pd
-import requests
-from skyfield.api import load
-from PIL import Image
-from io import BytesIO
-import folium
+from fuzzywuzzy import process
+from datetime import datetime
+import numpy as np
+import pydeck as pdk
 
-# ---- 衛星情報定義 (20個) ----
-satellites_info = {
-    "ISS (ZARYA)": {
-        "country": "International",
-        "purpose": "Research",
-        "tle_url": "https://celestrak.org/NORAD/elements/stations.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d0/ISS_Expedition_20.jpg"
-    },
-    "Hubble Space Telescope": {
-        "country": "USA",
-        "purpose": "Astronomy",
-        "tle_url": "https://celestrak.org/NORAD/elements/science.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/HST-SM4.jpeg"
-    },
-    "Terra": {
-        "country": "USA",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/4/45/Terra_Satellite.jpg"
-    },
-    "Aqua": {
-        "country": "USA",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Aqua_satellite.jpg"
-    },
-    "Landsat 8": {
-        "country": "USA",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/Landsat_8_artwork.jpg"
-    },
-    "NOAA 19": {
-        "country": "USA",
-        "purpose": "Weather",
-        "tle_url": "https://www.celestrak.com/NORAD/elements/weather.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/NOAA-19.jpg"
-    },
-    "Sentinel-1A": {
-        "country": "EU",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/2/23/Sentinel-1_spacecraft_model.png"
-    },
-    "Sentinel-2A": {
-        "country": "EU",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Sentinel-2_model.jpg"
-    },
-    "Jason-3": {
-        "country": "International",
-        "purpose": "Oceanography",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Jason-3_Artist_Concept.jpg"
-    },
-    "Starlink-30000": {
-        "country": "USA",
-        "purpose": "Communications",
-        "tle_url": "https://celestrak.org/NORAD/elements/starlink.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Starlink_SpaceX.jpg"
-    },
-    "Globalstar M086": {
-        "country": "USA",
-        "purpose": "Communications",
-        "tle_url": "https://celestrak.org/NORAD/elements/globalstar.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Globalstar_Satellite.jpg"
-    },
-    "TDRS 12": {
-        "country": "USA",
-        "purpose": "Communications",
-        "tle_url": "https://celestrak.org/NORAD/elements/tdrs.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/6/62/TDRS-M_Artist_Rendering.jpg"
-    },
-    "COSMO-SkyMed 1": {
-        "country": "Italy",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/COSMO-SkyMed.jpg"
-    },
-    "Envisat": {
-        "country": "EU",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/73/Envisat_artist_view.jpg"
-    },
-    "MetOp-B": {
-        "country": "EU",
-        "purpose": "Weather",
-        "tle_url": "https://celestrak.org/NORAD/elements/noaa.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/e/e7/Metop-B.jpg"
-    },
-    "TanDEM-X": {
-        "country": "Germany",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/c/c2/TanDEM-X_Satellite.jpg"
-    },
-    "WorldView-3": {
-        "country": "USA",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/WorldView-3_Artist_Rendering.jpg"
-    },
-    "IKONOS": {
-        "country": "USA",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/2/2b/IKONOS_satellite.jpg"
-    },
-    "Cartosat-2": {
-        "country": "India",
-        "purpose": "Earth Observation",
-        "tle_url": "https://celestrak.org/NORAD/elements/resource.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/7/76/Cartosat-2_Artist_View.jpg"
-    },
-    "Fengyun 3D": {
-        "country": "China",
-        "purpose": "Weather",
-        "tle_url": "https://celestrak.org/NORAD/elements/weather.txt",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Fengyun-3.jpg"
+# ---- 衛星名の候補生成 ----
+def extract_satellite_names(name):
+    parts = []
+    if pd.isna(name):
+        return parts
+    for segment in name.split(","):
+        segment = segment.strip()
+        if "(" in segment:
+            before, inside = segment.split("(", 1)
+            before = before.strip()
+            inside = inside.replace(")", "").strip()
+            if before:
+                parts.append(before)
+            if inside:
+                parts.append(inside)
+        else:
+            parts.append(segment)
+    return list(set(parts))  # 重複除去
+
+# ---- ファジーマッチング処理 ----
+def fuzzy_match(satellite_name, candidates, year=None):
+    best_match, score = process.extractOne(satellite_name, candidates)
+    if score < 80:
+        return None
+    return best_match
+
+# ---- TLEエポック年抽出 ----
+def extract_epoch_year(line1):
+    try:
+        year_str = line1[18:20]
+        year = int(year_str)
+        return 2000 + year if year < 57 else 1900 + year
+    except:
+        return None
+
+# ---- TLE読み込み ----
+def load_tle_file(path):
+    with open(path, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f.readlines()]
+    satellites = []
+    for i in range(0, len(lines), 3):
+        if i+2 >= len(lines):
+            continue
+        name, line1, line2 = lines[i:i+3]
+        year = extract_epoch_year(line1)
+        satellites.append({
+            "tle_name": name,
+            "line1": line1,
+            "line2": line2,
+            "epoch_year": year
+        })
+    return satellites
+
+# ---- 緯度経度推定（単純な円軌道モデルで仮表示） ----
+def dummy_orbit_positions(n=100):
+    lats = 10 * np.sin(np.linspace(0, 2*np.pi, n))
+    lons = np.linspace(-180, 180, n)
+    return pd.DataFrame({"lat": lats, "lon": lons})
+
+# ---- Streamlitアプリ本体 ----
+def main():
+    st.title("🌍 UCS & TLE 衛星マッチングアプリ")
+
+    # データ読み込み
+    ucs_df = pd.read_csv("ucs.csv", quotechar='"')
+    tle_data = load_tle_file("tle.txt")
+
+    # UCS 衛星名の候補を展開
+    ucs_df["Name Variants"] = ucs_df["Name of Satellite, Alternate Names"].apply(extract_satellite_names)
+    name_to_index = {
+        name: idx
+        for idx, variants in ucs_df["Name Variants"].items()
+        for name in variants
     }
-}
 
-# ---- Streamlit画面 ----
-st.title("🌍 衛星リアルタイムビューア")
+    # マッチ処理
+    matched_list = []
+    for tle in tle_data:
+        match_name = fuzzy_match(tle["tle_name"], list(name_to_index.keys()))
+        if match_name:
+            ucs_row = ucs_df.iloc[name_to_index[match_name]]
+            if tle["epoch_year"] is not None:
+                launch_year = pd.to_numeric(ucs_row["Launch Year"], errors="coerce")
+                if pd.notna(launch_year) and tle["epoch_year"] < launch_year:
+                    continue  # TLEが打ち上げ年より前 → 無視
+            matched_list.append({
+                "TLE Name": tle["tle_name"],
+                "Matched UCS Name": match_name,
+                "Country of Operator": ucs_row.get("Country of Operator", ""),
+                "Users": ucs_row.get("Users", ""),
+                "Launch Year": ucs_row.get("Launch Year", ""),
+                "line1": tle["line1"],
+                "line2": tle["line2"]
+            })
 
-# 国・目的でフィルタリング
-countries = sorted(set(info["country"] for info in satellites_info.values()))
-purposes = sorted(set(info["purpose"] for info in satellites_info.values()))
+    matched_df = pd.DataFrame(matched_list)
 
-selected_country = st.selectbox("🌎 国を選択", ["すべて"] + countries)
-selected_purpose = st.selectbox("🎯 目的を選択", ["すべて"] + purposes)
+    st.success(f"🔍 一致した衛星数: {len(matched_df)}")
 
-# 衛星リストフィルタ
-def satellite_filter(info):
-    if selected_country != "すべて" and info["country"] != selected_country:
-        return False
-    if selected_purpose != "すべて" and info["purpose"] != selected_purpose:
-        return False
-    return True
+    # 絞り込み
+    countries = matched_df["Country of Operator"].dropna().unique()
+    selected_country = st.selectbox("国を選択", ["すべて"] + sorted(countries.tolist()))
+    if selected_country != "すべて":
+        matched_df = matched_df[matched_df["Country of Operator"] == selected_country]
 
-filtered_satellites = [name for name, info in satellites_info.items() if satellite_filter(info)]
-if not filtered_satellites:
-    st.error("条件に合う衛星がありません。")
-    st.stop()
+    users = matched_df["Users"].dropna().unique()
+    selected_user = st.selectbox("目的を選択", ["すべて"] + sorted(users.tolist()))
+    if selected_user != "すべて":
+        matched_df = matched_df[matched_df["Users"] == selected_user]
 
-selected_satellite = st.selectbox("🛰️ 衛星を選択", filtered_satellites)
-sat_info = satellites_info[selected_satellite]
+    # 表示
+    st.dataframe(matched_df[["TLE Name", "Matched UCS Name", "Country of Operator", "Users", "Launch Year"]])
 
-# 衛星基本情報
-st.subheader(f"🛰️ {selected_satellite}")
-st.write(f"**国**: {sat_info['country']}")
-st.write(f"**目的**: {sat_info['purpose']}")
+    # 衛星を選択して軌道表示
+    selected_row = st.selectbox("衛星を選択して軌道表示", matched_df["TLE Name"].tolist())
+    if selected_row:
+        pos_df = dummy_orbit_positions()
+        st.pydeck_chart(pdk.Deck(
+            map_style="mapbox://styles/mapbox/light-v9",
+            initial_view_state=pdk.ViewState(
+                latitude=0,
+                longitude=0,
+                zoom=1,
+                pitch=0,
+            ),
+            layers=[
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=pos_df,
+                    get_position='[lon, lat]',
+                    get_radius=300000,
+                    get_fill_color='[255, 0, 0, 160]',
+                    pickable=True,
+                ),
+            ],
+        ))
 
-# 画像表示
-#response = requests.get(sat_info["image_url"])
-#img = Image.open(BytesIO(response.content))
-#st.image(img, caption=f"{selected_satellite} (出典: Wikimedia Commons)", use_container_width=True)
-
-# 衛星位置取得
-stations_url = sat_info["tle_url"]
-satellites = load.tle_file(stations_url)
-satellite_obj = None
-for s in satellites:
-    if s.name == selected_satellite:
-        satellite_obj = s
-        break
-if satellite_obj is None:
-    st.error("選択した衛星のTLEデータが見つかりませんでした。")
-    st.stop()
-
-# 現在時刻取得
-ts = load.timescale()
-t_now = ts.now()
-
-# 衛星位置計算
-geocentric = satellite_obj.at(t_now)
-subpoint = geocentric.subpoint()
-lat_now = subpoint.latitude.degrees
-lon_now = subpoint.longitude.degrees
-
-# 地図作成
-m = folium.Map(location=[lat_now, lon_now], zoom_start=3)
-folium.Marker([lat_now, lon_now], popup=f"現在位置: {selected_satellite}").add_to(m)
-
-# 過去24時間の軌跡
-time_steps = [t_now - (i / 1440) for i in range(1, 181)]  # 3時間ぶん
-
-# 点で軌跡をプロット
-for t in time_steps:
-    geocentric = satellite_obj.at(t)
-    subpoint = geocentric.subpoint()
-    folium.CircleMarker(
-        location=[subpoint.latitude.degrees, subpoint.longitude.degrees],
-        radius=2, color="blue", fill=True
-    ).add_to(m)
-
-
-#trajectory = []
-#for t in time_steps:
-#    geo = satellite_obj.at(t)
-#    sp = geo.subpoint()
-#    trajectory.append((sp.latitude.degrees, sp.longitude.degrees))
-
-# 線で軌跡をプロット
-#folium.PolyLine(trajectory, color="blue", weight=2.5, opacity=0.7).add_to(m)
-
-# 地図表示
-st.components.v1.html(m._repr_html_(), height=500)
-
-# 現在位置表示
-st.write(f"**現在位置**: 緯度 {lat_now:.2f}°, 経度 {lon_now:.2f}°")
+if __name__ == "__main__":
+    main()

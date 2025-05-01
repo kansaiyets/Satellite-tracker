@@ -1,7 +1,6 @@
 streamlit
 pandas
-requests
-skyfield
-plotly
-pillow
-folium
+rapidfuzz
+pyproj
+numpy
+pydeck

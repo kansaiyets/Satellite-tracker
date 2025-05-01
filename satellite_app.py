@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from fuzzywuzzy import process
+from rapidfuzz import process, fuzz
 from datetime import datetime
 import numpy as np
 import pydeck as pdk
@@ -24,12 +24,12 @@ def extract_satellite_names(name):
             parts.append(segment)
     return list(set(parts))  # 重複除去
 
-# ---- ファジーマッチング処理 ----
-def fuzzy_match(satellite_name, candidates, year=None):
-    best_match, score = process.extractOne(satellite_name, candidates)
-    if score < 80:
-        return None
-    return best_match
+# ---- ファジーマッチング処理（rapidfuzz）----
+def fuzzy_match(satellite_name, candidates, threshold=80):
+    result = process.extractOne(
+        satellite_name, candidates, scorer=fuzz.ratio, score_cutoff=threshold
+    )
+    return result[0] if result else None
 
 # ---- TLEエポック年抽出 ----
 def extract_epoch_year(line1):
@@ -58,7 +58,7 @@ def load_tle_file(path):
         })
     return satellites
 
-# ---- 緯度経度推定（単純な円軌道モデルで仮表示） ----
+# ---- 緯度経度のダミー表示 ----
 def dummy_orbit_positions(n=100):
     lats = 10 * np.sin(np.linspace(0, 2*np.pi, n))
     lons = np.linspace(-180, 180, n)
@@ -66,7 +66,7 @@ def dummy_orbit_positions(n=100):
 
 # ---- Streamlitアプリ本体 ----
 def main():
-    st.title("🌍 UCS & TLE 衛星マッチングアプリ")
+    st.title("🛰️ UCS & TLE 衛星マッチングアプリ（rapidfuzz版）")
 
     # データ読み込み
     ucs_df = pd.read_csv("ucs.csv", quotechar='"')
@@ -80,16 +80,18 @@ def main():
         for name in variants
     }
 
+    candidates = list(name_to_index.keys())
+
     # マッチ処理
     matched_list = []
     for tle in tle_data:
-        match_name = fuzzy_match(tle["tle_name"], list(name_to_index.keys()))
+        match_name = fuzzy_match(tle["tle_name"], candidates)
         if match_name:
             ucs_row = ucs_df.iloc[name_to_index[match_name]]
             if tle["epoch_year"] is not None:
                 launch_year = pd.to_numeric(ucs_row["Launch Year"], errors="coerce")
                 if pd.notna(launch_year) and tle["epoch_year"] < launch_year:
-                    continue  # TLEが打ち上げ年より前 → 無視
+                    continue  # TLEが打ち上げ年より前なら無視
             matched_list.append({
                 "TLE Name": tle["tle_name"],
                 "Matched UCS Name": match_name,
@@ -106,19 +108,19 @@ def main():
 
     # 絞り込み
     countries = matched_df["Country of Operator"].dropna().unique()
-    selected_country = st.selectbox("国を選択", ["すべて"] + sorted(countries.tolist()))
+    selected_country = st.selectbox("国でフィルタ", ["すべて"] + sorted(countries.tolist()))
     if selected_country != "すべて":
         matched_df = matched_df[matched_df["Country of Operator"] == selected_country]
 
     users = matched_df["Users"].dropna().unique()
-    selected_user = st.selectbox("目的を選択", ["すべて"] + sorted(users.tolist()))
+    selected_user = st.selectbox("目的でフィルタ", ["すべて"] + sorted(users.tolist()))
     if selected_user != "すべて":
         matched_df = matched_df[matched_df["Users"] == selected_user]
 
     # 表示
     st.dataframe(matched_df[["TLE Name", "Matched UCS Name", "Country of Operator", "Users", "Launch Year"]])
 
-    # 衛星を選択して軌道表示
+    # 軌道可視化
     selected_row = st.selectbox("衛星を選択して軌道表示", matched_df["TLE Name"].tolist())
     if selected_row:
         pos_df = dummy_orbit_positions()
@@ -136,7 +138,7 @@ def main():
                     data=pos_df,
                     get_position='[lon, lat]',
                     get_radius=300000,
-                    get_fill_color='[255, 0, 0, 160]',
+                    get_fill_color='[0, 100, 255, 160]',
                     pickable=True,
                 ),
             ],

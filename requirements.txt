@@ -4,3 +4,4 @@ rapidfuzz
 pyproj
 numpy
 pydeck
+pyorbital.orbital

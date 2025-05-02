@@ -1,152 +1,123 @@
 import streamlit as st
 import pandas as pd
 import requests
-from io import StringIO
-from rapidfuzz import process, fuzz
-import numpy as np
-import pydeck as pdk
-import re
+import io
+from rapidfuzz import process
+from datetime import datetime
 
-st.title("🛰️ UCS & TLE 衛星マッチング＆可視化アプリ")
-
-# ---------------------
-# データ取得
-# ---------------------
 @st.cache_data
 def load_ucs_data():
-    url = "https://www.ucsusa.org/sites/default/files/2024-01/UCS-Satellite-Database%205-1-2023%20%28text%29.txt"
-    data = requests.get(url).content.decode("utf-8", errors="ignore")
-    df = pd.read_csv(StringIO(data), sep="\t")
-    df.columns = [col.strip().strip('"') for col in df.columns]
-    df = df.applymap(lambda x: x.strip('"') if isinstance(x, str) else x)
+    url = "https://raw.githubusercontent.com/space-track/UCS-Satellite-Database/main/ucs-satellite-database.csv"
+    df = pd.read_csv(url, quotechar='"')
+    df.columns = df.columns.str.strip('"')  # 列名から余分なダブルクォートを削除
     return df
 
 @st.cache_data
 def load_tle_data():
-    url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
-    lines = requests.get(url).text.strip().split("\n")
-    tle_data = []
-    for i in range(0, len(lines), 3):
-        if i+2 >= len(lines):
-            continue
-        name, line1, line2 = lines[i:i+3]
-        year_str = line1[18:20]
-        try:
-            year = int(year_str)
-            epoch_year = 2000 + year if year < 57 else 1900 + year
-        except:
-            epoch_year = None
-        tle_data.append({
-            "tle_name": name.strip(),
-            "line1": line1.strip(),
-            "line2": line2.strip(),
-            "epoch_year": epoch_year
-        })
-    return tle_data
+    url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=csv"
+    response = requests.get(url)
+    return pd.read_csv(io.StringIO(response.text))
 
-# ---------------------
-# 名前候補抽出
-# ---------------------
-def extract_satellite_names(name):
+def preprocess_ucs_name(name):
     if pd.isna(name):
         return []
-    name = re.sub(r"[()]", ",", name)
-    return [n.strip() for n in re.split(r"[,\s]+", name) if n.strip()]
+    name = name.replace("（", "(").replace("）", ")")  # 全角括弧を半角に統一
+    parts = name.split(",")
+    result = []
+    for part in parts:
+        if "(" in part and ")" in part:
+            main, rest = part.split("(", 1)
+            rest = rest.rstrip(")")
+            result.append(main.strip())
+            result.append(rest.strip())
+        else:
+            result.append(part.strip())
+    return list(set(result))
 
-# ---------------------
-# ファジーマッチ処理
-# ---------------------
-def fuzzy_match(name, candidates, threshold=80):
-    result = process.extractOne(name, candidates, scorer=fuzz.token_sort_ratio, score_cutoff=threshold)
-    return result[0] if result else None
+def normalize_users(user):
+    if pd.isna(user):
+        return "不明"
+    parts = [p.strip() for p in user.split("/")]
+    return "/".join(sorted(parts))
 
-# ---------------------
-# ダミー軌道生成
-# ---------------------
-def dummy_orbit_positions(n=100):
-    lats = 10 * np.sin(np.linspace(0, 2*np.pi, n))
-    lons = np.linspace(-180, 180, n)
-    return pd.DataFrame({"lat": lats, "lon": lons})
+def match_satellites(ucs_df, tle_df):
+    matches = []
+    for idx, tle_row in tle_df.iterrows():
+        tle_name = tle_row["OBJECT_NAME"]
+        match_found = False
 
-# ---------------------
-# 実行処理
-# ---------------------
-st.write("🔄 データ取得中...")
-ucs_df = load_ucs_data()
-tle_data = load_tle_data()
-
-st.write(f"✅ UCS 衛星数: {len(ucs_df)}、TLE 衛星数: {len(tle_data)}")
-
-threshold = st.slider("ファジーマッチの閾値", 20, 100, 60)
-
-if st.button("マッチングを実行"):
-    st.write("🔍 マッチングを実行中...")
-
-    ucs_df["Name Variants"] = ucs_df["Name of Satellite, Alternate Names"].apply(extract_satellite_names)
-    name_to_index = {
-        name: idx
-        for idx, variants in ucs_df["Name Variants"].items()
-        for name in variants
-    }
-    candidates = list(name_to_index.keys())
-
-    matched_list = []
-    for tle in tle_data:
-        match_name = fuzzy_match(tle["tle_name"], candidates, threshold)
-        if match_name:
-            ucs_row = ucs_df.iloc[name_to_index[match_name]]
-            launch_year = pd.to_numeric(ucs_row.get("Launch Year", ""), errors="coerce")
-            if tle["epoch_year"] is not None and pd.notna(launch_year) and tle["epoch_year"] < launch_year:
+        for ucs_idx, ucs_row in ucs_df.iterrows():
+            names = preprocess_ucs_name(ucs_row["Name of Satellite, Alternate Names"])
+            if not names:
                 continue
-            matched_list.append({
-                "TLE Name": tle["tle_name"],
-                "Matched UCS Name": match_name,
-                "Country of Operator": ucs_row.get("Country of Operator", ""),
-                "Users": ucs_row.get("Users", ""),
-                "Launch Year": launch_year,
-                "line1": tle["line1"],
-                "line2": tle["line2"]
-            })
+            best_name, score, _ = process.extractOne(tle_name, names)
+            if score < 90:
+                continue
+            # 打ち上げ年確認
+            tle_epoch = tle_row.get("EPOCH", "")
+            if isinstance(tle_epoch, str) and len(tle_epoch) >= 4:
+                tle_year = int(tle_epoch[:4])
+            else:
+                tle_year = None
 
-    matched_df = pd.DataFrame(matched_list)
+            ucs_launch = ucs_row.get("Launch Year", "")
+            try:
+                ucs_year = int(ucs_launch)
+            except:
+                ucs_year = None
 
-    st.success(f"✅ 一致した衛星数: {len(matched_df)}")
+            if tle_year is not None and ucs_year is not None and tle_year < ucs_year:
+                continue  # エポック年が打ち上げ年より古いものは除外
 
-    # 絞り込み
-    countries = matched_df["Country of Operator"].dropna().unique()
-    selected_country = st.selectbox("🌍 国でフィルタ", ["すべて"] + sorted(countries.tolist()))
+            match = {
+                "TLE Name": tle_name,
+                "UCS Name": best_name,
+                "Match Score": score,
+                "OBJECT_ID": tle_row["OBJECT_ID"],
+                "EPOCH": tle_row["EPOCH"],
+                "Country of Operator": ucs_row.get("Country of Operator", "不明"),
+                "Users": normalize_users(ucs_row.get("Users", "不明")),
+                "Purpose": ucs_row.get("Purpose", "不明"),
+                "Class of Orbit": tle_row.get("CLASS_OF_ORBIT", "不明"),
+                "Mean Motion": tle_row.get("MEAN_MOTION", ""),
+                "Inclination": tle_row.get("INCLINATION", ""),
+                "Apogee": tle_row.get("APOAPSIS", ""),
+                "Perigee": tle_row.get("PERIAPSIS", ""),
+            }
+            matches.append(match)
+            match_found = True
+            break  # 複数候補があっても最初の一致で確定
+
+    return pd.DataFrame(matches)
+
+# データ読み込み
+ucs_df = load_ucs_data()
+tle_df = load_tle_data()
+
+st.title("UCS × CelesTrak 衛星マッチング")
+
+# 初回マッチング実行
+if "matched_df" not in st.session_state:
+    if st.button("マッチングを実行"):
+        st.session_state.matched_df = match_satellites(ucs_df, tle_df)
+else:
+    st.success("マッチング結果を表示中")
+
+if "matched_df" in st.session_state and not st.session_state.matched_df.empty:
+    matched_df = st.session_state.matched_df
+
+    # フィルタUI
+    countries = ["すべて"] + sorted(matched_df["Country of Operator"].fillna("不明").unique().tolist())
+    selected_country = st.selectbox("国でフィルタ", countries)
+
+    users = ["すべて"] + sorted(matched_df["Users"].fillna("不明").unique().tolist())
+    selected_user = st.selectbox("目的（Users）でフィルタ", users)
+
+    filtered_df = matched_df.copy()
     if selected_country != "すべて":
-        matched_df = matched_df[matched_df["Country of Operator"] == selected_country]
-
-    users = matched_df["Users"].dropna().unique()
-    selected_user = st.selectbox("🎯 目的でフィルタ", ["すべて"] + sorted(users.tolist()))
+        filtered_df = filtered_df[filtered_df["Country of Operator"] == selected_country]
     if selected_user != "すべて":
-        matched_df = matched_df[matched_df["Users"] == selected_user]
+        filtered_df = filtered_df[filtered_df["Users"] == selected_user]
 
-    # 表示
-    st.dataframe(matched_df[["TLE Name", "Matched UCS Name", "Country of Operator", "Users", "Launch Year"]])
-
-    # 軌道可視化
-    if not matched_df.empty:
-        selected_row = st.selectbox("🛰️ 衛星を選んで軌道表示", matched_df["TLE Name"].tolist())
-        if selected_row:
-            pos_df = dummy_orbit_positions()
-            st.pydeck_chart(pdk.Deck(
-                map_style="mapbox://styles/mapbox/light-v9",
-                initial_view_state=pdk.ViewState(
-                    latitude=0,
-                    longitude=0,
-                    zoom=1,
-                    pitch=0,
-                ),
-                layers=[
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=pos_df,
-                        get_position='[lon, lat]',
-                        get_radius=300000,
-                        get_fill_color='[0, 100, 255, 160]',
-                        pickable=True,
-                    ),
-                ],
-            ))
+    st.write(f"表示中の衛星数：{len(filtered_df)} 件")
+    st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)

@@ -1,27 +1,45 @@
-from pyorbital.orbital import Orbital
 import streamlit as st
 import pandas as pd
 import requests
 import io
-from rapidfuzz import process
+from pyorbital.orbital import Orbital
 from datetime import datetime
+from rapidfuzz import process
+import folium
+from folium.plugins import MarkerCluster
 
+# UCSデータを読み込む
 @st.cache_data
 def load_ucs_data():
     url = "https://www.ucsusa.org/sites/default/files/2024-01/UCS-Satellite-Database%205-1-2023%20%28text%29.txt"
-    df = pd.read_csv(url, sep="\t", encoding="ISO-8859-1")
-    return df
+    return pd.read_csv(url, sep="\t", encoding="ISO-8859-1")
 
+# TLEデータを読み込む
 @st.cache_data
 def load_tle_data():
-    url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=csv"
+    url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
     response = requests.get(url)
-    return pd.read_csv(io.StringIO(response.text))
+    lines = response.text.strip().splitlines()
 
+    tle_entries = []
+    for i in range(0, len(lines), 3):
+        if i + 2 >= len(lines):
+            continue
+        name = lines[i].strip()
+        line1 = lines[i + 1].strip()
+        line2 = lines[i + 2].strip()
+        tle_entries.append({
+            "OBJECT_NAME": name,
+            "TLE_LINE1": line1,
+            "TLE_LINE2": line2
+        })
+    return pd.DataFrame(tle_entries)
+
+# UCS名の前処理
 def preprocess_ucs_name(name):
     if pd.isna(name):
         return []
-    name = name.replace("（", "(").replace("）", ")")
+    name = name.replace("（", "(").replace("）", ")")  # 全角括弧を半角に統一
     parts = name.split(",")
     result = []
     for part in parts:
@@ -34,33 +52,42 @@ def preprocess_ucs_name(name):
             result.append(part.strip())
     return list(set(result))
 
+# ユーザー名を正規化する
 def normalize_users(user):
     if pd.isna(user):
         return "不明"
     parts = [p.strip() for p in user.split("/")]
     return "/".join(sorted(parts))
 
+# UCSとTLEのデータをマッチングする
 def match_satellites(ucs_df, tle_df):
     matches = []
-    for _, tle_row in tle_df.iterrows():
+    for idx, tle_row in tle_df.iterrows():
         tle_name = tle_row["OBJECT_NAME"]
+        match_found = False
 
-        for _, ucs_row in ucs_df.iterrows():
+        for ucs_idx, ucs_row in ucs_df.iterrows():
             names = preprocess_ucs_name(ucs_row["Name of Satellite, Alternate Names"])
             if not names:
                 continue
             best_name, score, _ = process.extractOne(tle_name, names)
             if score < 90:
                 continue
+            # 打ち上げ年確認
+            tle_epoch = tle_row.get("EPOCH", "")
+            if isinstance(tle_epoch, str) and len(tle_epoch) >= 4:
+                tle_year = int(tle_epoch[:4])
+            else:
+                tle_year = None
 
-            # 年チェック
+            ucs_launch = ucs_row.get("Launch Year", "")
             try:
-                tle_year = int(str(tle_row["EPOCH"])[:4])
-                ucs_year = int(ucs_row.get("Launch Year", ""))
+                ucs_year = int(ucs_launch)
             except:
-                continue
-            if tle_year < ucs_year:
-                continue
+                ucs_year = None
+
+            if tle_year is not None and ucs_year is not None and tle_year < ucs_year:
+                continue  # エポック年が打ち上げ年より古いものは除外
 
             match = {
                 "TLE Name": tle_name,
@@ -76,19 +103,21 @@ def match_satellites(ucs_df, tle_df):
                 "Inclination": tle_row.get("INCLINATION", ""),
                 "Apogee": tle_row.get("APOAPSIS", ""),
                 "Perigee": tle_row.get("PERIAPSIS", ""),
-                "TLE Line1": tle_row["TLE_LINE1"],
-                "TLE Line2": tle_row["TLE_LINE2"],
             }
             matches.append(match)
-            break
+            match_found = True
+            break  # 複数候補があっても最初の一致で確定
+
     return pd.DataFrame(matches)
 
 # データ読み込み
 ucs_df = load_ucs_data()
 tle_df = load_tle_data()
 
+# Streamlitアプリのタイトル
 st.title("UCS × CelesTrak 衛星マッチング")
 
+# 初回マッチング実行
 if "matched_df" not in st.session_state:
     if st.button("マッチングを実行"):
         st.session_state.matched_df = match_satellites(ucs_df, tle_df)
@@ -98,36 +127,45 @@ else:
 if "matched_df" in st.session_state and not st.session_state.matched_df.empty:
     matched_df = st.session_state.matched_df
 
-    countries = ["すべて"] + sorted(matched_df["Country of Operator"].fillna("不明").unique())
+    # フィルタUI
+    countries = ["すべて"] + sorted(matched_df["Country of Operator"].fillna("不明").unique().tolist())
     selected_country = st.selectbox("国でフィルタ", countries)
 
-    users = ["すべて"] + sorted(matched_df["Users"].fillna("不明").unique())
+    users = ["すべて"] + sorted(matched_df["Users"].fillna("不明").unique().tolist())
     selected_user = st.selectbox("目的（Users）でフィルタ", users)
-
-    match_score_threshold = st.slider("最低マッチスコア", 90, 100, 90)
 
     filtered_df = matched_df.copy()
     if selected_country != "すべて":
         filtered_df = filtered_df[filtered_df["Country of Operator"] == selected_country]
     if selected_user != "すべて":
         filtered_df = filtered_df[filtered_df["Users"] == selected_user]
-    filtered_df = filtered_df[filtered_df["Match Score"] >= match_score_threshold]
 
     st.write(f"表示中の衛星数：{len(filtered_df)} 件")
     st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
 
     # 地図表示
+    tle_lines = [
+        Orbital(f["UCS Name"], line1=f["TLE_LINE1"], line2=f["TLE_LINE2"]) for _, f in filtered_df.iterrows()
+    ]
+
     now = datetime.utcnow()
     coords = []
-    for _, row in filtered_df.iterrows():
+    for tle in tle_lines:
         try:
-            orb = Orbital(row["UCS Name"], line1=row["TLE Line1"], line2=row["TLE Line2"])
-            lon, lat, _ = orb.get_lonlatalt(now)
-            coords.append({"name": row["UCS Name"], "lat": lat, "lon": lon})
+            lon, lat, _ = tle.get_lonlatalt(now)
+            coords.append({"name": tle.name, "lat": lat, "lon": lon})
         except Exception as e:
-            st.warning(f"{row['UCS Name']} の位置取得に失敗: {e}")
             continue
 
+    # 地図作成
     if coords:
-        st.subheader("現在位置のマップ表示")
-        st.map(pd.DataFrame(coords))
+        map_center = [coords[0]["lat"], coords[0]["lon"]]
+        m = folium.Map(location=map_center, zoom_start=2)
+
+        marker_cluster = MarkerCluster().add_to(m)
+        for coord in coords:
+            folium.Marker([coord["lat"], coord["lon"]], popup=coord["name"]).add_to(marker_cluster)
+
+        st.markdown("### 衛星の位置")
+        st.write("衛星の現在位置を地図に表示しています。")
+        st.pydeck_chart(m)
